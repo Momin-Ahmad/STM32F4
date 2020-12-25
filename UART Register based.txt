@@ -1,0 +1,149 @@
+#include "stm32f4xx.h"                  // Device header
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+char  str[50];
+uint32_t i=0,a=0;
+char gelenVeri[21] = {0};
+const char *karsilastir = "yesil";
+const char *yeni = "mavi";
+const char *karsilastir2 = "sari";
+
+
+void USART2_IRQHandler(void)
+	{
+ // Okunan data registeri bos ise
+ // yani herhangi veri gelmediyse bekle
+ // RXNE: RX data register not empty
+
+	 while(USART_GetFlagStatus(USART2, USART_FLAG_RXNE) == RESET);
+  	char tmp = USART_ReceiveData(USART2); // Data registeri dolu ise okunan veriyi gelenVeri'ye kaydet
+   // USART_SendData(USART2, tmp);
+	//	gelenVeri[i]=tmp;
+		//i++;
+		  	if(tmp=='a')
+			{
+			    GPIO_SetBits(GPIOD,GPIO_Pin_12);
+					GPIO_ResetBits(GPIOD,GPIO_Pin_13);
+					GPIO_ResetBits(GPIOD,GPIO_Pin_14);
+					GPIO_ResetBits(GPIOD,GPIO_Pin_15);
+
+			}
+       if(tmp=='b')
+			{
+			    GPIO_ResetBits(GPIOD,GPIO_Pin_12);
+					GPIO_SetBits(GPIOD,GPIO_Pin_13);
+					GPIO_ResetBits(GPIOD,GPIO_Pin_14);
+					GPIO_ResetBits(GPIOD,GPIO_Pin_15);
+
+			}
+       if(tmp=='c')
+			{
+			    GPIO_ResetBits(GPIOD,GPIO_Pin_12);
+					GPIO_ResetBits(GPIOD,GPIO_Pin_13);
+					GPIO_SetBits(GPIOD,GPIO_Pin_14);
+					GPIO_ResetBits(GPIOD,GPIO_Pin_15);
+
+			}
+       if(tmp=='d')
+			{
+			    GPIO_ResetBits(GPIOD,GPIO_Pin_12);
+					GPIO_ResetBits(GPIOD,GPIO_Pin_13);
+					GPIO_ResetBits(GPIOD,GPIO_Pin_14);
+					GPIO_SetBits(GPIOD,GPIO_Pin_15);
+
+			}
+
+	}
+
+
+
+
+ /*void delay(uint32_t time)
+{
+  while(time)
+	time--;
+}*/
+
+
+
+int main()
+{
+  GPIO_InitTypeDef GPIO_InitStructure;
+	//USART_InitTypeDef USART_InitStructure;
+
+
+	//RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2,ENABLE); // transmitter tx A2 GPIOya bagli usartta
+	RCC->APB1ENR=RCC_APB1ENR_USART2EN;
+	//RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA,ENABLE);
+	RCC->AHB1ENR=RCC_AHB1ENR_GPIOAEN|RCC_AHB1ENR_GPIODEN;
+	//RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOD,ENABLE); //GPIODya clock verdik,AHB1 hangi clock hattina bagli oldugu
+
+
+	GPIO_InitStructure.GPIO_Mode=GPIO_Mode_OUT;
+	GPIO_InitStructure.GPIO_Pin=GPIO_Pin_12 | GPIO_Pin_13 |GPIO_Pin_14 | GPIO_Pin_15 ;
+	GPIO_InitStructure.GPIO_OType=GPIO_OType_PP;
+	GPIO_InitStructure.GPIO_Speed=GPIO_Speed_100MHz;
+	GPIO_Init(GPIOD, &GPIO_InitStructure); // D portu Out olarak tanimlanmis
+
+	GPIOA->MODER|=(GPIO_MODER_MODER3_1);
+	GPIOA->MODER&=~(GPIO_MODER_MODER3_0);
+	//GPIO_InitStructure.GPIO_Mode=GPIO_Mode_AF; //Alternatif fonksiyonlar(input,output,adc disinda baska sey oldugu)
+	//GPIO_InitStructure.GPIO_Pin=GPIO_Pin_2 | GPIO_Pin_3;
+	//GPIO_InitStructure.GPIO_PuPd=GPIO_PuPd_UP;
+	GPIOA->PUPDR&=~(GPIO_PUPDR_PUPDR3_1);
+	GPIOA->PUPDR|=(GPIO_PUPDR_PUPDR3_0);
+	//GPIO_InitStructure.GPIO_Speed=GPIO_Speed_100MHz;
+	GPIOA->OSPEEDR=GPIO_OSPEEDER_OSPEEDR3_1 | GPIO_OSPEEDER_OSPEEDR3_0;
+
+	//GPIO_Init(GPIOA,&GPIO_InitStructure);
+
+	//GPIO_PinAFConfig(GPIOA,GPIO_PinSource2,GPIO_AF_USART2);//USARTtan bilgiyi GPIOya atacaz,CPUya tanitmamiz lazim
+	//GPIO_PinAFConfig(GPIOA, GPIO_PinSource3, GPIO_AF_USART2);
+	GPIOA->AFR[0]=0b0111000000000000;
+
+	//USART_InitStructure.USART_BaudRate=28800; // Saniye içinde hat üzerinden kaç tane bit gönderilmesi gerektigi
+	USART2->BRR=0x05B2;
+	//USART_InitStructure.USART_HardwareFlowControl=USART_HardwareFlowControl_None;
+	//USART_InitStructure.USART_Mode=USART_Mode_Rx | USART_Mode_Tx;
+	USART2->CR1=0;
+	//USART_InitStructure.USART_Parity=USART_Parity_No;
+	USART2->CR2=0;
+	//USART_InitStructure.USART_StopBits=USART_StopBits_1;
+	//USART_InitStructure.USART_WordLength=USART_WordLength_8b;
+	//USART_Init(USART2,&USART_InitStructure);
+
+	//USART_Cmd(USART2,ENABLE);
+	//USART_ITConfig(USART2, USART_IT_TXE, ENABLE);
+	//USART_ITConfig(USART2, USART_IT_RXNE, ENABLE);
+	USART2->CR1|= USART_CR1_RE | USART_CR1_UE | USART_CR1_RXNEIE;
+
+	//NVIC_InitTypeDef NVIC_InitStructure;
+	NVIC_EnableIRQ(USART2_IRQn);
+	NVIC_SetPriority(USART2_IRQn, 0);
+  /*NVIC_InitStructure.NVIC_IRQChannel = USART2_IRQn;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+
+  NVIC_Init(&NVIC_InitStructure);*/
+
+
+
+	while(1)
+	{
+
+
+
+		 USART2_IRQHandler();
+
+
+	}
+
+
+}
+
+
+
+

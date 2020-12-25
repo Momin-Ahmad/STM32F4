@@ -1,0 +1,30 @@
+#include "stm32f4xx.h"
+
+ void delay_1s(void);
+
+int main(void) {
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN;
+
+	GPIOC->MODER |= GPIO_MODER_MODER15_0;
+	GPIOC->MODER &= ~(GPIO_MODER_MODER15_1);
+
+	GPIOC->OTYPER &= ~(GPIO_OTYPER_OT_15);
+
+	GPIOC->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR15_0;
+	GPIOC->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR15_1;
+
+	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR15);
+
+	GPIOC->ODR = 0;
+	while (1) {
+		delay_1s();
+		GPIOC->ODR^=(1<<15);
+	}
+}
+
+ void delay_1s(void){
+    SysTick->LOAD=15999999;    //RELOAD VALUE goes here
+    SysTick->CTRL|=0x5;        //Triggering with external clock
+    while((SysTick->CTRL&(1<<16))==0);//monitoring bit 16 to be set
+ 	SysTick->CTRL=0;      //Disabling SysTick Timer
+ }

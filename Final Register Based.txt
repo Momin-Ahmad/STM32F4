@@ -1,0 +1,368 @@
+//device header
+#include "stm32f4xx.h"
+
+//LCD Command Pins
+#define LCD_DPRT GPIOC->ODR
+//LCD Data Pins
+#define LCD_CPRT GPIOD->ODR
+//LCD Register Select Pin
+#define LCD_RS 0
+//LCD Read/Write Enable
+#define LCD_RW 1
+//LCD Enable-Pulse Pin
+#define LCD_EN 2
+
+
+//USART2 Receive Interrupt Handler
+void USART2_IRQHandler(void) {
+	//Checks whether data register is not empty
+	while (USART_GetFlagStatus(USART2, USART_FLAG_RXNE) == RESET);
+
+	//Store received character in a temporary variable
+	char tmp = USART_ReceiveData(USART2);
+
+	//If received character is D, move down
+	if (tmp == 'D') {
+		//both wheels rotate for backward motion
+		GPIOB->ODR |= (1 << 15);
+		GPIOB->ODR &= ~(1 << 13);
+		GPIOB->ODR |= (1 << 14);
+		GPIOB->ODR &= ~(1 << 12);
+
+	}
+	//If received character is U, move up
+	if (tmp == 'U') {
+		//both wheels rotate for upward motion
+		GPIOB->ODR &= ~(1 << 15);
+		GPIOB->ODR |= (1 << 13);
+		GPIOB->ODR &= ~(1 << 14);
+		GPIOB->ODR |= (1 << 12);
+
+	}
+	//If received character is R, turn right
+	if (tmp == 'R') {
+		//the right wheel moves for backward motion
+		//the left wheel moves for upward motion
+		GPIOB->ODR |= (1 << 15);
+		GPIOB->ODR &= ~(1 << 13);
+		GPIOB->ODR &= ~(1 << 14);
+		GPIOB->ODR |= (1 << 12);
+
+	}
+	//If received character is L, turn left
+	if (tmp == 'L') {
+		//the right wheel moves for upward motion
+		//the left wheel moves for backward motion
+		GPIOB->ODR |= (1 << 13);
+		GPIOB->ODR &= ~(1 << 15);
+		GPIOB->ODR |= (1 << 14);
+		GPIOB->ODR &= ~(1 << 12);
+
+	}
+	//If received character is C, stop
+	if (tmp == 'C') {
+		//both wheels stop
+		GPIOB->ODR &= ~(1 << 13);
+		GPIOB->ODR &= ~(1 << 15);
+		GPIOB->ODR &= ~(1 << 14);
+		GPIOB->ODR &= ~(1 << 12);
+	}
+	//If received character is f, low speed mode
+	if (tmp == 'f') {
+		//reduce duty cycle of PWM square wave
+		TIM1->CCR3 = 10000;
+		TIM1->CCR1 = 10000;
+	}
+	//If received character is g, medium speed mode
+	if (tmp == 'g') {
+		//medium duty cycle of PWM square wave
+		TIM1->CCR3 = 15000;
+		TIM1->CCR1 = 15000;
+	}
+	//If received character is h, high speed mode
+	if (tmp == 'h') {
+		//high duty cycle of PWM square wave
+		TIM1->CCR3 = 20000;
+		TIM1->CCR1 = 20000;
+	}
+	//If received character is e, sound horn
+	if (tmp == 'e') {
+		//The buzzer used required a pulse to operate
+		//We give several pulses over a short period of time to make it audible
+		int i = 0;
+		while (i < 50) {
+			for (uint32_t i = 33333; i > 0; i--) {
+			}
+			//toggle the buzzer input to make it work
+			GPIOB->ODR ^= (1 << 1);
+			i++;
+		}
+	}
+}
+
+//Delay function for LCD
+void delay_us(unsigned int d) {
+	int i = 5000 * d;
+	for (; i > 0; i--) {
+
+	}
+}
+
+//Command send function for LCD
+void lcdCommand(char cmnd) {
+	//Send command on LCD command Pins
+	LCD_DPRT = cmnd;
+	//LCD_RS=0
+	LCD_CPRT &= ~(1 << LCD_RS);
+	//LCD_RW=0
+	LCD_CPRT &= ~(1 << LCD_RW);
+	//Generate a pulse on LCD_EN
+	LCD_CPRT |= (1 << LCD_EN);
+	delay_us(1);
+	LCD_CPRT &= ~(1 << LCD_EN);
+	delay_us(100);
+}
+
+//Data send function for LCD
+void lcdData(unsigned char data) {
+	//Send data on LCD data Pins
+	LCD_DPRT = data;
+	//LCD_RS=1
+	LCD_CPRT |= (1 << LCD_RS);
+	//LCD_RW=0
+	LCD_CPRT &= ~(1 << LCD_RW);
+	//Generate a pulse on LCD_EN
+	LCD_CPRT |= (1 << LCD_EN);
+	delay_us(1);
+	LCD_CPRT &= ~(1 << LCD_EN);
+	delay_us(100);
+}
+
+//LCD initialization function
+void FUNCTINIC() {
+	//Configure Command pins as output
+	GPIOC->MODER = 0b0101010101010101;
+	//Enable high speed operation
+	GPIOC->OSPEEDR = 0b1111111111111111;
+	//Default push-pull mode
+	GPIOC->OTYPER = 0;
+	//No pull-up or pull-down
+	GPIOC->PUPDR = 0;
+}
+void FUNCTINID() {
+	//Configure Data pins as output
+	GPIOD->MODER = 0b0101010101010101;
+	//Enable high speed operation
+	GPIOD->OSPEEDR = 0b1111111111111111;
+	//Default push-pull mode
+	GPIOD->OTYPER = 0;
+	//No pull-up or pull-down
+	GPIOD->PUPDR = 0;
+}
+
+//Got to a specific point in the LCD matrix
+void lcd_gotoxy(unsigned char x, unsigned char y) {
+	//Array contains the first character addresses of each line of the matrix
+	unsigned char firstCharAdr[] = { 0x80, 0xC0 };
+	lcdCommand(firstCharAdr[y - 1] + x - 1);
+	delay_us(100);
+}
+
+//Function to print string
+void lcd_print(char*str) {
+	unsigned char i = 0;
+	//go through the string and print each character one by one
+	while (str[i] != 0) {
+		lcdData(str[i]);
+		i++;
+	}
+}
+
+//Initialize the LCD
+void lcd_init() {
+	FUNCTINIC();
+	FUNCTINID();
+	//clear the Enable pin
+	LCD_CPRT &= ~(1 << LCD_EN);
+	delay_us(2000);
+	//commands to initialize the LCD for operation
+	lcdCommand(0x38);
+	lcdCommand(0x0E);
+	lcdCommand(0x01);
+	delay_us(2000);
+	lcdCommand(0x06);
+}
+
+int main() {
+	//GPIO_InitTypeDef GPIO_InitStructure;
+	//USART_InitTypeDef USART_InitStructure;
+
+	//Enable clock for USART 2
+	RCC->APB1ENR = RCC_APB1ENR_USART2EN;
+	//Enable clocks for GPIOA, GPIOB & GPIOC
+	RCC->AHB1ENR = RCC_AHB1ENR_GPIOAEN | RCC_AHB1ENR_GPIOBEN | RCC_AHB1ENR_GPIOCEN | RCC_AHB1ENR_GPIODEN;
+	RCC->APB2ENR |= RCC_APB2ENR_TIM1EN;
+
+	//PB15 is configured as output
+	GPIOB->MODER |= GPIO_MODER_MODER15_0;
+	GPIOB->MODER &= ~(GPIO_MODER_MODER15_1);
+
+	//Default push-pull mode for PB15
+	GPIOB->OTYPER &= ~(GPIO_OTYPER_OT_15);
+
+	//High speed mode for PB15
+	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR15_0;
+	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR15_1;
+
+	//No pull-up or pull down for PB15
+	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR15);
+
+	//Output mode for PB13
+	GPIOB->MODER |= GPIO_MODER_MODER13_0;
+	GPIOB->MODER &= ~(GPIO_MODER_MODER13_1);
+
+	//Default push-pull mode for PB13
+	GPIOB->OTYPER &= ~(GPIO_OTYPER_OT_13);
+
+	//High speed mode for PB13
+	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR13_0;
+	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR13_1;
+
+	//No pull-up or pull-down for PB13
+	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR13);
+
+	//Output mode for PB14
+	GPIOB->MODER |= GPIO_MODER_MODER14_0;
+	GPIOB->MODER &= ~(GPIO_MODER_MODER14_1);
+
+	//Default push-pull mode for PB14
+	GPIOB->OTYPER &= ~(GPIO_OTYPER_OT_14);
+
+	//High speed mode for PB14
+	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR14_0;
+	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR14_1;
+
+	//No pull-up or pull-down for PB14
+	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR14);
+
+	//Output mode for PB12
+	GPIOB->MODER |= GPIO_MODER_MODER12_0;
+	GPIOB->MODER &= ~(GPIO_MODER_MODER12_1);
+
+	//Default push-pull mode for PB12
+	GPIOB->OTYPER &= ~(GPIO_OTYPER_OT_12);
+
+	//High speed mode for PB12
+	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR12_0;
+	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR12_1;
+
+	//No pull-up or pull-down for PB12
+	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR12);
+
+	//Output mode for PB1
+	GPIOB->MODER |= GPIO_MODER_MODER1_0;
+	GPIOB->MODER &= ~(GPIO_MODER_MODER1_1);
+
+	//Default push-pull mode for PB1
+	GPIOB->OTYPER &= ~(GPIO_OTYPER_OT_1);
+
+	//High speed mode for PB1
+	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR1_0;
+	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR1_1;
+
+	//No pull-up or pull-down for PB1
+	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR1);
+
+	//PWM starts
+	//No prescaler for Timer1
+	TIM1->PSC = 0;
+	//Timer counts up to 20000
+	TIM1->ARR = 20000;
+	//Compare value. Gives 50% duty cycle since 10000/20000=0.5
+	//If CCR3=5000, duty cycle is 25%
+	//If CCR3=15000, duty cycle is 75%
+	//We are using channel 3, for channel 1 use CCR1
+	//Channel 3 of timer 1 is connecter to PA10
+	TIM1->CCR3 = 5000;
+	TIM1->CCR1 = 5000;
+	//Enable Timer 1
+	TIM1->CR1 |= TIM_CR1_CEN;
+	//enable PWM, enable Preload
+	TIM1->CCMR2 |= TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1 | TIM_CCMR2_OC3PE;
+	TIM1->CCMR1 |= TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1 | TIM_CCMR1_OC1PE;
+	//Enable compare output for channel 3
+	TIM1->CCER |= TIM_CCER_CC3E;
+	TIM1->CCER |= TIM_CCER_CC1E;
+	//Main output enable
+	TIM1->BDTR |= TIM_BDTR_MOE;
+	//Enable Update Event Generation
+	TIM1->EGR |= TIM_EGR_UG;
+	//Enable output on PA10
+	GPIOA->MODER &= ~(GPIO_MODER_MODER10_0);
+	GPIOA->MODER |= GPIO_MODER_MODER10_1;
+	GPIOA->MODER &= ~(GPIO_MODER_MODER8_0);
+	GPIOA->MODER |= GPIO_MODER_MODER8_1;
+	//Enable Alternate Function for PA10
+	//PWM is alternate function of PA10 besides normal I/O
+	GPIOA->AFR[1] = 0b100000001;
+	//default push-pull mode
+	GPIOA->OTYPER &= ~(GPIO_OTYPER_OT_10);
+	GPIOA->OTYPER &= ~(GPIO_OTYPER_OT_8);
+	//high speed
+	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR10_0;
+	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR10_1;
+	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR8_0;
+	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR8_1;
+	//default no pull up or pull down
+	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR10);
+	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR8);
+	//PWM ends
+
+	//Configure PA2 & PA3 as Alternate function pins
+	GPIOA->MODER|=(GPIO_MODER_MODER3_1);
+	GPIOA->MODER&=~(GPIO_MODER_MODER3_0);
+	//Pull up PA2 & PA3
+	GPIOA->PUPDR&=~(GPIO_PUPDR_PUPDR3_1);
+	GPIOA->PUPDR|=(GPIO_PUPDR_PUPDR3_0);
+	//High speed mode for PA2 & PA3
+	GPIOA->OSPEEDR=GPIO_OSPEEDER_OSPEEDR3_1 | GPIO_OSPEEDER_OSPEEDR3_0;
+
+	//Configure PA3 as USART2 Rx pin
+	GPIOA->AFR[0]=0b0111000000000000;
+
+	//USART2 configuration
+	//Set baud rate to 3x baud rate at receiving end
+	//In this case baud rate at receiving end is 9600
+	//USART_InitStructure.USART_BaudRate = 28800;
+	//No parity bit
+	//One stop bit
+	//8-bit data length
+	USART2->CR1=0;
+	USART2->CR2=0;
+	USART2->BRR=0x05B2;
+	//Enable Receiving mode
+	//Enable USART Update Enable
+	//Enable USART Receive Interrupt Enable
+	USART2->CR1|= USART_CR1_RE | USART_CR1_UE | USART_CR1_RXNEIE;
+
+	//Configure USART2 Nested Vector Interrupt Controller
+	NVIC_EnableIRQ(USART2_IRQn);
+	NVIC_SetPriority(USART2_IRQn, 0);
+
+	//Initialize the LCD
+	lcd_init();
+	//Print the following two lines
+	lcd_gotoxy(1, 1);
+	lcd_print("M&M MPS PROJECT");
+	lcd_gotoxy(1, 2);
+	lcd_print("BLUETOOTH CAR");
+
+	//Wait for an interrupt and then act accordingly
+	while (1) {
+
+		//USART2_IRQHandler();
+
+	}
+
+}
+

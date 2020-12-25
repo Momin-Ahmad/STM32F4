@@ -1,0 +1,51 @@
+#include "stm32f4xx.h"
+
+int main(void) {
+	//Configure RCC for GPIOA
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+	//Configure RCC for Timer1
+	RCC->APB2ENR |= RCC_APB2ENR_TIM1EN;
+
+	//No prescaler for Timer1
+	TIM1->PSC = 0;
+	//Timer counts up to 20000
+	TIM1->ARR = 20000;
+	//Compare value. Gives 50% duty cycle since 10000/20000=0.5
+	//If CCR3=5000, duty cycle is 25%
+	//If CCR3=15000, duty cycle is 75%
+	//We are using channel 3, for channel 1 use CCR1
+	//Channel 3 of timer 1 is connecter to PA10
+	TIM1->CCR3 = 5000;
+	//Enable Timer 1
+	TIM1->CR1 |= TIM_CR1_CEN;
+	//enable PWM, enable Preload
+	TIM1->CCMR2 |= TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1 | TIM_CCMR2_OC3PE;
+	//Enable compare output for channel 3
+	TIM1->CCER |= TIM_CCER_CC3E;
+	//Main output enable
+	TIM1->BDTR |= TIM_BDTR_MOE;
+	//Enable Update Event Generation
+	TIM1->EGR |= TIM_EGR_UG;
+
+	//Enable output on PA10
+	GPIOA->MODER &= ~(GPIO_MODER_MODER10_0);
+	GPIOA->MODER |= GPIO_MODER_MODER10_1;
+
+	//Enable Alternate Function for PA10
+	//PWM is alternate function of PA10 besides normal I/O
+	GPIOA->AFR[1] = 0b100000000;
+
+	//default push-pull mode
+	GPIOA->OTYPER &= ~(GPIO_OTYPER_OT_10);
+
+	//high speed
+	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR10_0;
+	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR10_1;
+
+	//default no pull up or pull down
+	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR10);
+
+
+	while (1) {}
+}
+

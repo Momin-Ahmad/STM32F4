@@ -1,0 +1,56 @@
+#include "stm32f4xx.h"
+GPIO_InitTypeDef GPIO_LED;
+
+int main(void) {
+
+	//enable clocks for GPIO Ports B and C
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN;
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;
+
+	//Configuring Port C as output
+	GPIOC->MODER |= GPIO_MODER_MODER6_0;
+	GPIOC->MODER &= ~(GPIO_MODER_MODER6_1);
+
+	//default push-pull mode	
+	GPIOC->OTYPER &= ~(GPIO_OTYPER_OT_6);
+
+	//high speed
+	GPIOC->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR6_0;
+	GPIOC->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR6_1;
+
+	//no pull up or pull down
+	GPIOC->PUPDR &= ~(GPIO_PUPDR_PUPDR6);
+	
+	//Configuring Port B as input
+	GPIOB->MODER &= ~(GPIO_MODER_MODER1);
+
+	//no pull up or pull down
+	GPIOB->PUPDR &=~ (GPIO_PUPDR_PUPDR1_1);
+	
+	//enable nested vector interrupt on external line 1
+	NVIC_EnableIRQ(EXTI1_IRQn);
+	//set priority
+	NVIC_SetPriority(EXTI1_IRQn, 0);
+	//enable clock for SYSCFG
+	RCC->APB2ENR|=RCC_APB2ENR_SYSCFGEN;
+	//Enable interrupt on External Line 1
+	SYSCFG->EXTICR[0]&=~(SYSCFG_EXTICR1_EXTI1);
+	SYSCFG->EXTICR[0]|=SYSCFG_EXTICR1_EXTI1_PB;
+	//Unmask external interrupt 1
+	EXTI->IMR|=EXTI_IMR_MR1;
+	//Select Rising edge mode
+	EXTI->RTSR |= EXTI_RTSR_TR1;
+	
+
+	while (1) {
+	//wait for an interrupt
+	}
+}
+
+void EXTI1_IRQHandler(void) {
+	//toggle bit 6 of Port C
+	GPIOC->ODR ^= (1 << 6);
+	//Clear the bit in the Pending Register
+	EXTI->PR|=EXTI_PR_PR1;
+
+}
